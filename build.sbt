@@ -9,7 +9,7 @@ lazy val `kamon-armeria-test` = (project in file("."))
     version := "0.1",
     scalaVersion := "2.12.12",
     libraryDependencies ++= Seq(
-      "com.linecorp.armeria" % "armeria" % "1.0.0",
+      "com.linecorp.armeria" % "armeria" % "1.1.0",
       "com.linecorp.armeria" % "armeria-dropwizard2" % "1.0.0",
       "com.linecorp.armeria" % "armeria-spring-boot2-starter" % "1.0.0",
       "ch.qos.logback" % "logback-classic" % "1.2.3",
