@@ -1,3 +1,4 @@
+import com.lightbend.sbt.javaagent.JavaAgent.JavaAgentKeys.javaAgents
 import sbt.Keys.version
 
 val kamonV = "2.1.4"

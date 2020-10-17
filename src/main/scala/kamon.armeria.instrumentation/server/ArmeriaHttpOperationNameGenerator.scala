@@ -1,13 +1,14 @@
-package kamon
+package kamon.armeria.instrumentation.server
 
 import java.util.Locale
 
+import kamon.armeria.instrumentation.BaseArmeriaHttpOperationNameGenerator
 import kamon.instrumentation.http.HttpMessage.Request
 /**
  * A GET request to https://localhost:8080/kamon-io/Kamon will generate the following operationName
  * kamon-io.Kamon.get
  */
-class ArmeriaNameGenerator extends BaseKamonArmeriaOperationNameGenerator {
+class ArmeriaHttpOperationNameGenerator extends BaseArmeriaHttpOperationNameGenerator {
 
   override protected def name(request: Request, normalisedPath: String): String =
     s"$normalisedPath${request.method.toLowerCase(Locale.ENGLISH)}"
@@ -16,8 +17,8 @@ class ArmeriaNameGenerator extends BaseKamonArmeriaOperationNameGenerator {
     s"${request.method}${request.path}"
 }
 
-object KamonArmeriaOperationNameGenerator {
-  def apply() = new ArmeriaNameGenerator()
+object ArmeriaHttpOperationNameGenerator {
+  def apply() = new ArmeriaHttpOperationNameGenerator()
 }
 
 
