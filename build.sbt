@@ -11,6 +11,7 @@ lazy val `kamon-armeria-test` = (project in file("."))
     scalaVersion := "2.12.12",
     libraryDependencies ++= Seq(
       "com.linecorp.armeria" % "armeria" % "1.1.0",
+      "com.linecorp.armeria" % "armeria-grpc" % "1.1.0",
       "com.linecorp.armeria" % "armeria-dropwizard2" % "1.0.0",
       "com.linecorp.armeria" % "armeria-spring-boot2-starter" % "1.0.0",
       "ch.qos.logback" % "logback-classic" % "1.2.3",
@@ -20,5 +21,10 @@ lazy val `kamon-armeria-test` = (project in file("."))
       "io.dropwizard" % "dropwizard-core" % "2.0.13"
     ),
     javacOptions ++= Seq("-parameters"),
-    javaAgents += "io.kamon" % "kanela-agent" % "1.0.5" % "compile;runtime;test"
+    javaAgents += "io.kamon" % "kanela-agent" % "1.0.5" % "compile;runtime;test",
+
+    PB.targets in Compile := Seq(
+      PB.gens.java -> (sourceManaged in Compile).value
+    )
   )
+

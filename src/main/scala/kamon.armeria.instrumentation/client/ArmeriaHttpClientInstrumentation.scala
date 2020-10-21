@@ -15,11 +15,12 @@
 
 package kamon.armeria.instrumentation.client
 
-import com.linecorp.armeria.client.ClientBuilder
+import com.linecorp.armeria.client.{ClientBuilder, HttpClient}
 import kamon.Kamon
-import kamon.instrumentation.http.HttpClientInstrumentation
+import kamon.armeria.instrumentation.converters.JavaConverters
 import kanela.agent.api.instrumentation.InstrumentationBuilder
 import kanela.agent.libs.net.bytebuddy.asm.Advice
+
 
 class ArmeriaHttpClientInstrumentation extends InstrumentationBuilder {
   onType("com.linecorp.armeria.client.ClientBuilder")
@@ -28,13 +29,14 @@ class ArmeriaHttpClientInstrumentation extends InstrumentationBuilder {
 
 class ArmeriaHttpClientBuilderAdvisor
 
-object ArmeriaHttpClientBuilderAdvisor {
+object ArmeriaHttpClientBuilderAdvisor extends JavaConverters {
   lazy val httpClientConfig = Kamon.config().getConfig("kamon.instrumentation.armeria.http-client")
 
   @Advice.OnMethodExit(suppress = classOf[Throwable])
   def addKamonDecorator(@Advice.This builder: ClientBuilder): Unit = {
-    val clientInstrumentation = HttpClientInstrumentation.from(httpClientConfig, "armeria-http-client")
-    builder.decorator(delegate => new ArmeriaHttpClientDecorator(delegate, clientInstrumentation))
+    builder.decorator(toJavaFunction((delegate: HttpClient) => new ArmeriaHttpClientDecorator(delegate, httpClientConfig)))
   }
 }
+
+
 
