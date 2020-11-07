@@ -1,13 +1,12 @@
 import java.net.InetSocketAddress
-import java.security.{KeyStore, SecureRandom}
 import java.util.concurrent.Executors
 
 import client.SimpleHttpClient
-import com.linecorp.armeria.common.{HttpMethod, HttpResponse, HttpStatus, RequestHeaders}
+import com.linecorp.armeria.client.{ClientFactory, Clients, WebClient}
+import com.linecorp.armeria.common._
 import com.linecorp.armeria.server.Server
 import com.linecorp.armeria.server.annotation.{Get, Param}
 import com.linecorp.armeria.server.healthcheck.HealthCheckService
-import javax.net.ssl.{KeyManagerFactory, SSLContext}
 import kamon.Kamon
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,25 +21,27 @@ object Main extends App {
     .annotatedService().build(TestRoutesSupport())
 
 
-//  val password = "kamon".toCharArray
-//  val ks = KeyStore.getInstance("PKCS12")
-//  ks.load(getClass.getClassLoader.getResourceAsStream("https/server.p12"), password)
-//
-//  val kmf = KeyManagerFactory.getInstance("SunX509")
-//  kmf.init(ks, password)
-//
-//  val context = SSLContext.getInstance("TLS")
-//  context.init(kmf.getKeyManagers, null, new SecureRandom)
-//
-//  sb.https(InetSocketAddress.createUnresolved("localhost", 8082))
-//    .tls(kmf)
-    sb
-    .http(InetSocketAddress.createUnresolved("localhost", 8081))
+  sb
+    .http(InetSocketAddress.createUnresolved("localhost", 8000))
+    .https(InetSocketAddress.createUnresolved("localhost", 8081))
+    .https(InetSocketAddress.createUnresolved("localhost", 8291))
+    .tlsSelfSigned()
 
   val server = sb.build()
   server
     .start()
     .join()
+
+  val clientFactory = ClientFactory.builder().tlsNoVerifyHosts("localhost", "127.0.0.1").build()
+  val webClientBuilder = Clients.builder(s"https://127.0.0.1:8081").build(classOf[WebClient])
+  val webClient = clientFactory.newClient(webClientBuilder).asInstanceOf[WebClient]
+  val request = HttpRequest.of(RequestHeaders.of(HttpMethod.GET, "/dummy"))
+
+  //  var i = 1
+  //  while (i <= 1) {
+  //    webClient.execute(request)
+  //    i = i + 1
+  //  }
 
   server
 
@@ -48,9 +49,10 @@ object Main extends App {
 
 final class TestRoutesSupport() {
   implicit val ec = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
+
   @Get("/dummy")
   def getDummy(): HttpResponse = {
-    Future{
+    Future {
       val t = SimpleHttpClient.a.execute(com.linecorp.armeria.common.HttpRequest.of(RequestHeaders.of(HttpMethod.GET, "topics"))).aggregate().get()
       println(t.status())
     }
@@ -66,8 +68,8 @@ final class TestRoutesSupport() {
 
   @Get("/nf")
   def nf(): HttpResponse = {
-   HttpResponse.of(HttpStatus.NOT_FOUND)
-     }
+    HttpResponse.of(HttpStatus.NOT_FOUND)
+  }
 
   @Get("/dummy-error")
   def getDummyError(): HttpResponse = SimpleHttpClient.c.execute(com.linecorp.armeria.common.HttpRequest.of(RequestHeaders.of(HttpMethod.PUT, "topics")))

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package example.grpc;
+package example.armeria.grpc;
 
 service HelloService {
   rpc Hello (HelloRequest) returns (HelloReply) {}
@@ -18,3 +18,4 @@ message HelloRequest {
 message HelloReply {
   string message = 1;
 }
+

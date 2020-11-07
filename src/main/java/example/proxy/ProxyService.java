@@ -52,7 +52,7 @@ public final class ProxyService extends AbstractHttpService {
         final HealthCheckedEndpointGroup healthCheckedGroup =
                 HealthCheckedEndpointGroup.builder(animationGroup, "/internal/l7check")
                                           .protocol(SessionProtocol.HTTP)
-                                          .retryInterval(Duration.ofSeconds(10))
+                                          .retryInterval(Duration.ofSeconds(3600))
                                           .build();
 
         // Wait until the initial health check is finished.

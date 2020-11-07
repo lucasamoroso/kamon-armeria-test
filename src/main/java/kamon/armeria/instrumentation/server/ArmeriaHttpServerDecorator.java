@@ -17,11 +17,9 @@ package kamon.armeria.instrumentation.server;
 
 import com.linecorp.armeria.common.HttpRequest;
 import com.linecorp.armeria.common.HttpResponse;
-import com.linecorp.armeria.common.HttpStatus;
 import com.linecorp.armeria.server.HttpService;
 import com.linecorp.armeria.server.ServiceRequestContext;
 import com.linecorp.armeria.server.SimpleDecoratingHttpService;
-import com.typesafe.config.Config;
 import io.netty.util.AttributeKey;
 import kamon.Kamon;
 import kamon.armeria.instrumentation.converters.KamonArmeriaMessageConverter;
@@ -30,52 +28,54 @@ import kamon.instrumentation.http.HttpServerInstrumentation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
+import java.util.Map;
+
 public class ArmeriaHttpServerDecorator extends SimpleDecoratingHttpService {
-  private static final String FALLBACK_SERVICE_NAME = "com.linecorp.armeria.server.FallbackService";
-  private static final AttributeKey<Storage.Scope> TRACE_SCOPE_KEY = AttributeKey.valueOf(Storage.Scope.class, "TRACE_SCOPE");
+  public static final AttributeKey<HttpServerInstrumentation.RequestHandler> REQUEST_HANDLER_TRACE_KEY =
+          AttributeKey.valueOf(HttpServerInstrumentation.RequestHandler.class, "REQUEST_HANDLER_TRACE");
 
-  private final HttpServerInstrumentation httpServerInstrumentation;
-  private final String serverHost;
+  Logger logger = LoggerFactory.getLogger("serverDecorator");
 
-  public ArmeriaHttpServerDecorator(HttpService delegate, Config httpServerConfig, String serverHost, Integer serverPort) {
+  private final Map<Integer, HttpServerInstrumentation> serverInstrumentationMap;
+
+  public ArmeriaHttpServerDecorator(HttpService delegate, Map<Integer, HttpServerInstrumentation> serverInstrumentations) {
     super(delegate);
-    this.serverHost = serverHost;
-    this.httpServerInstrumentation = HttpServerInstrumentation.from(httpServerConfig, "armeria-http-server", serverHost, serverPort);
+    this.serverInstrumentationMap = serverInstrumentations;
   }
 
   @Override
   public HttpResponse serve(ServiceRequestContext ctx, HttpRequest req) throws Exception {
+    final HttpServerInstrumentation httpServerInstrumentation = serverInstrumentationMap.get(req.uri().getPort());
 
-    final Storage.Scope scope = Kamon.storeContext(Kamon.currentContext());
-    ctx.setAttr(TRACE_SCOPE_KEY, scope);
+    if (httpServerInstrumentation != null) {
 
-    final HttpServerInstrumentation.RequestHandler requestHandler =
-            httpServerInstrumentation.createHandler(KamonArmeriaMessageConverter.toRequest(req, serverHost, httpServerInstrumentation.port()));
+      final HttpServerInstrumentation.RequestHandler requestHandler =
+              httpServerInstrumentation.createHandler(KamonArmeriaMessageConverter.toRequest(req));
 
-    Logger logger = LoggerFactory.getLogger("serverDecorator");
-    logger.info("generated context " + Kamon.currentContext().hashCode());
-    logger.info("generated req span " + requestHandler.span().id());
-
-    ctx.log()
-            .whenComplete()
-            .thenAccept(log -> {
-              try (Storage.Scope requestCtxScope = ctx.attr(TRACE_SCOPE_KEY)) {
-                logger.info("processing context " + Kamon.currentContext().hashCode());
-                logger.info("processing req span " + requestHandler.span().id());
-                if (HttpStatus.NOT_FOUND.equals(log.responseHeaders().status()) && FALLBACK_SERVICE_NAME.equals(log.serviceName())) {
-                  requestHandler.span().name(httpServerInstrumentation.settings().unhandledOperationName());
+      ctx.log()
+              .whenComplete()
+              .thenAccept(log -> {
+                try (Storage.Scope scope = Kamon.storeContext(ctx.attr(REQUEST_HANDLER_TRACE_KEY).context())) {
+                  logger.info("processing req handler context " + scope.context().hashCode());
+                  logger.info("processing kamon context " + Kamon.currentContext().hashCode());
+                  requestHandler.buildResponse(KamonArmeriaMessageConverter.toResponse(log), scope.context());
+                  requestHandler.responseSent();
                 }
-                requestHandler.buildResponse(KamonArmeriaMessageConverter.toResponse(log), requestCtxScope.context());
-                requestHandler.responseSent();
-              }
-            });
+              });
 
-    try (Storage.Scope ignored = Kamon.storeContext(scope.context())) {
-      logger.info("unwraping context " + Kamon.currentContext().hashCode());
-      logger.info("unwraping req span " + requestHandler.span().id());
+      try (Storage.Scope ignored = Kamon.storeContext(requestHandler.context())) {
+        logger.info("unwraping req handler context " + requestHandler.context().hashCode());
+        logger.info("unwraping kamon context " + Kamon.currentContext().hashCode());
+        ctx.setAttr(REQUEST_HANDLER_TRACE_KEY, requestHandler);
+        return unwrap().serve(ctx, req);
+      }
+    } else {
       return unwrap().serve(ctx, req);
     }
+
   }
+
 }
 
 

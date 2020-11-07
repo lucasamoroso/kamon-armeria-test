@@ -20,7 +20,6 @@ import com.linecorp.armeria.client.HttpClient;
 import com.linecorp.armeria.client.SimpleDecoratingHttpClient;
 import com.linecorp.armeria.common.HttpRequest;
 import com.linecorp.armeria.common.HttpResponse;
-import com.typesafe.config.Config;
 import io.netty.util.AttributeKey;
 import kamon.Kamon;
 import kamon.armeria.instrumentation.client.timing.Timing;
@@ -32,48 +31,38 @@ import org.slf4j.LoggerFactory;
 
 
 public class ArmeriaHttpClientDecorator extends SimpleDecoratingHttpClient {
-  private static final AttributeKey<Storage.Scope> TRACE_SCOPE_KEY = AttributeKey.valueOf(Storage.Scope.class, "TRACE_SCOPE");
+  private static final AttributeKey<Storage.Scope> CLIENT_TRACE_SCOPE_KEY = AttributeKey.valueOf(Storage.Scope.class, "CLIENT_TRACE_SCOPE");
 
   private final HttpClientInstrumentation clientInstrumentation;
 
-  protected ArmeriaHttpClientDecorator(HttpClient delegate, Config httpClientConfig) {
+  protected ArmeriaHttpClientDecorator(HttpClient delegate, HttpClientInstrumentation clientInstrumentation) {
     super(delegate);
-    this.clientInstrumentation = HttpClientInstrumentation.from(httpClientConfig, "armeria-http-client");
+    this.clientInstrumentation = clientInstrumentation;
   }
+
+  Logger logger = LoggerFactory.getLogger("clientDecorator");
 
   @Override
   public HttpResponse execute(ClientRequestContext ctx, HttpRequest req) throws Exception {
-    Logger logger = LoggerFactory.getLogger("clientDecorator");
-
-    final Storage.Scope scope = Kamon.storeContext(Kamon.currentContext());
-    ctx.setAttr(TRACE_SCOPE_KEY, scope);
 
     final HttpClientInstrumentation.RequestHandler<HttpRequest> requestHandler =
             clientInstrumentation.createHandler(KamonArmeriaMessageConverter.getRequestBuilder(req), Kamon.currentContext());
 
-
-    logger.info("generated context " + Kamon.currentContext().hashCode());
-    logger.info("generated req span " + requestHandler.span().id());
-
-
     ctx.log()
             .whenComplete()
             .thenAccept(log -> {
-              try (Storage.Scope ignored = Kamon.storeContext(ctx.attr(TRACE_SCOPE_KEY).context())) {
+              try (Storage.Scope ignored = Kamon.storeContext(ctx.attr(CLIENT_TRACE_SCOPE_KEY).context())) {
                 logger.info("processing context " + Kamon.currentContext().hashCode());
-                logger.info("processing req span " + requestHandler.span().id());
                 Timing.takeTimings(log, requestHandler.span());
                 requestHandler.processResponse(KamonArmeriaMessageConverter.toKamonResponse(log));
               }
             });
 
-    try (Storage.Scope ignored = Kamon.storeContext(ctx.attr(TRACE_SCOPE_KEY).context())) {
-      logger.info("unwraping context " + Kamon.currentContext().hashCode());
-      logger.info("unwraping req span " + requestHandler.span().id());
+    try (Storage.Scope scope = Kamon.storeContext(Kamon.currentContext())) {
+      ctx.setAttr(CLIENT_TRACE_SCOPE_KEY, scope);
+      logger.info("unwraping kamon context " + Kamon.currentContext().hashCode());
       return unwrap().execute(ctx, requestHandler.request());
     } catch (Exception exception) {
-      logger.info("failed context " + Kamon.currentContext().hashCode());
-      logger.info("failed req span " + requestHandler.span().id());
       requestHandler.span().fail(exception.getMessage(), exception).finish();
       throw exception;
     }
