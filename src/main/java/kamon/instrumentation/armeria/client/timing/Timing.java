@@ -1,4 +1,4 @@
-package kamon.armeria.instrumentation.client.timing;
+package kamon.instrumentation.armeria.client.timing;
 
 import com.linecorp.armeria.common.logging.ClientConnectionTimings;
 import com.linecorp.armeria.common.logging.RequestLog;
